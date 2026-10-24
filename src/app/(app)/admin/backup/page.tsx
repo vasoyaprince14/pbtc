@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { requireOwner } from "@/lib/auth";
 import { fmtDate } from "@/lib/format";
 import BackupControls from "./BackupControls";
+import DangerZone from "./DangerZone";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,10 @@ EOF
 
 launchctl load ~/Library/LaunchAgents/com.pbtc.backup.plist`}</pre>
         <p className="text-gray-700 text-xs">Or run <code className="font-mono">node scripts/backup.mjs</code> whenever you want a manual backup — old backups are auto-pruned to the last 30.</p>
+      </div>
+
+      <div className="mt-4">
+        <DangerZone />
       </div>
     </div>
   );
