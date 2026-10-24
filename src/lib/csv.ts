@@ -41,9 +41,18 @@ export function parseCSV(text: string): string[][] {
   return rows;
 }
 
+/**
+ * Collapses a CSV header to its canonical key, so exports from Excel/Tally
+ * import without hand-renaming columns: "HSN Code", "hsn_code" and "HSNCODE"
+ * all become "hsncode".
+ */
+export function normalizeHeader(h: string): string {
+  return h.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export function toRecords(csv: string[][]): Record<string, string>[] {
   if (csv.length === 0) return [];
-  const headers = csv[0].map((h) => h.trim().toLowerCase());
+  const headers = csv[0].map((h) => normalizeHeader(h));
   return csv.slice(1).map((row) => {
     const rec: Record<string, string> = {};
     headers.forEach((h, i) => { rec[h] = (row[i] ?? "").trim(); });

@@ -8,8 +8,8 @@ type Kind = "products" | "customers" | "suppliers";
 
 const TEMPLATES: Record<Kind, { headers: string[]; sample: string[] }> = {
   products: {
-    headers: ["sku", "name", "hsncode", "unit", "category", "gstrate", "purchaseprice", "saleprice", "rack", "openingstock", "minstock"],
-    sample: ["BB-100", "Brass Bunsen Burner", "9017", "PCS", "Burners", "18", "250", "450", "A-1", "50", "10"],
+    headers: ["sku", "name", "hsncode", "unit", "category", "gstrate", "purchaseprice", "saleprice", "rack", "openingstock", "minstock", "image"],
+    sample: ["BB-100", "Brass Bunsen Burner", "9017", "PCS", "Burners", "18", "250", "450", "A-1", "50", "10", "BB-100.jpg"],
   },
   customers: {
     headers: ["name", "gstin", "statecode", "statename", "address", "city", "pincode", "phone", "email", "creditdays", "openingbalance"],
@@ -26,21 +26,27 @@ function templateCSV(kind: Kind): string {
   return t.headers.join(",") + "\n" + t.sample.join(",") + "\n";
 }
 
+const baseName = (s: string) => s.toLowerCase().replace(/\.[^.]+$/, "");
+
+type ImportResult = { created: number; updated?: number; errors: string[]; saved?: { sku: string; id: number }[] };
+
 export default function ImportPanel() {
   const [kind, setKind] = useState<Kind>("products");
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [fileName, setFileName] = useState<string>("");
-  const [result, setResult] = useState<{ created: number; errors: string[] } | null>(null);
+  const [images, setImages] = useState<File[]>([]);
+  const [updateExisting, setUpdateExisting] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [imgMsg, setImgMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
 
   const onFile = async (file: File) => {
     setResult(null);
+    setImgMsg(null);
     setFileName(file.name);
     const text = await file.text();
-    const parsed = parseCSV(text);
-    const records = toRecords(parsed);
-    setRows(records);
+    setRows(toRecords(parseCSV(text)));
   };
 
   const downloadTemplate = () => {
@@ -54,17 +60,57 @@ export default function ImportPanel() {
     URL.revokeObjectURL(url);
   };
 
+  /** Finds the picked file matching an `image` cell, by full name or basename. */
+  const findImage = (wanted: string): File | undefined => {
+    const w = wanted.trim().toLowerCase();
+    if (!w) return undefined;
+    return (
+      images.find((f) => f.name.toLowerCase() === w) ??
+      images.find((f) => baseName(f.name) === baseName(w))
+    );
+  };
+
+  // --- pre-import warnings (products only) ---
+  const isProducts = kind === "products";
+  const blankGst = isProducts ? rows.map((r, i) => (r.gstrate ? null : i + 2)).filter(Boolean) as number[] : [];
+  const wantImages = isProducts ? rows.filter((r) => r.image) : [];
+  const missingImages = wantImages.filter((r) => !findImage(r.image));
+
   const commit = () => {
     setResult(null);
+    setImgMsg(null);
     start(async () => {
       const res = await fetch(`/api/import/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ rows, mode: updateExisting ? "update" : "create" }),
       });
-      const d = await res.json();
+      const d: ImportResult = await res.json();
       setResult(d);
-      if (res.ok) router.refresh();
+      if (!res.ok) return;
+
+      // Attach pictures to the rows that imported successfully.
+      if (isProducts && images.length > 0 && d.saved?.length) {
+        const bySku = new Map(rows.map((r) => [r.sku, r]));
+        let ok = 0;
+        const failed: string[] = [];
+        for (const s of d.saved) {
+          const row = bySku.get(s.sku);
+          const file = row?.image ? findImage(row.image) : undefined;
+          if (!file) continue;
+          const fd = new FormData();
+          fd.append("file", file);
+          fd.append("category", "photo");
+          fd.append("notes", "Imported from CSV");
+          const up = await fetch(`/api/products/${s.id}/documents`, { method: "POST", body: fd });
+          if (up.ok) ok++;
+          else failed.push(s.sku);
+        }
+        setImgMsg(
+          `${ok} picture(s) attached` + (failed.length ? ` — failed for: ${failed.join(", ")}` : "")
+        );
+      }
+      router.refresh();
     });
   };
 
@@ -80,7 +126,7 @@ export default function ImportPanel() {
               <button
                 key={k}
                 className={`btn ${kind === k ? "bg-brand-600 text-white" : "bg-white border border-gray-300"}`}
-                onClick={() => { setKind(k); setRows([]); setResult(null); setFileName(""); }}
+                onClick={() => { setKind(k); setRows([]); setResult(null); setFileName(""); setImages([]); setImgMsg(null); }}
               >
                 {k[0].toUpperCase() + k.slice(1)}
               </button>
@@ -99,7 +145,56 @@ export default function ImportPanel() {
           />
           {fileName && <div className="text-xs text-gray-600 mt-1">Loaded: {fileName} ({rows.length} rows)</div>}
         </div>
+
+        {isProducts && (
+          <>
+            <div className="mt-4">
+              <label className="label">Product pictures (optional)</label>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                className="input"
+                onChange={(e) => setImages(Array.from(e.target.files ?? []))}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Put the file name in the CSV&apos;s <code className="font-mono">image</code> column (e.g.{" "}
+                <code className="font-mono">BB-100.jpg</code>), then select those image files here — open your
+                images folder and select them all. Files are matched by name.
+              </p>
+              {images.length > 0 && <div className="text-xs text-gray-600 mt-1">{images.length} image file(s) selected</div>}
+            </div>
+
+            <label className="mt-4 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={updateExisting} onChange={(e) => setUpdateExisting(e.target.checked)} />
+              <span>
+                Update products that already exist (match by SKU).
+                <span className="text-gray-500"> Only the columns you fill in are changed; blank cells are left alone.</span>
+              </span>
+            </label>
+          </>
+        )}
       </section>
+
+      {rows.length > 0 && (blankGst.length > 0 || missingImages.length > 0) && (
+        <section className="card p-4 border-orange-300 bg-orange-50 text-sm space-y-2">
+          <div className="font-semibold text-orange-800">⚠️ Check before importing</div>
+          {blankGst.length > 0 && (
+            <div>
+              <strong>{blankGst.length} row(s) have a blank <code className="font-mono">gstrate</code></strong> — these
+              will be saved as <strong>18%</strong>, not 0%. If any of these are 12% or 5% items, every invoice for
+              them will have the wrong tax. Rows: {blankGst.slice(0, 20).join(", ")}{blankGst.length > 20 ? "…" : ""}
+            </div>
+          )}
+          {missingImages.length > 0 && (
+            <div>
+              <strong>{missingImages.length} row(s) name a picture you haven&apos;t selected</strong> — those products
+              will import without a picture. Missing: {missingImages.slice(0, 10).map((r) => r.image).join(", ")}
+              {missingImages.length > 10 ? "…" : ""}
+            </div>
+          )}
+        </section>
+      )}
 
       {rows.length > 0 && (
         <section className="card overflow-hidden">
@@ -132,6 +227,10 @@ export default function ImportPanel() {
         <section className={`card p-4 ${result.errors.length ? "border-orange-300 bg-orange-50" : "border-green-300 bg-green-50"}`}>
           <div className="font-semibold">Import Result</div>
           <div className="text-sm mt-1">✅ Created: <strong>{result.created}</strong></div>
+          {typeof result.updated === "number" && result.updated > 0 && (
+            <div className="text-sm">♻️ Updated: <strong>{result.updated}</strong></div>
+          )}
+          {imgMsg && <div className="text-sm mt-1">🖼️ {imgMsg}</div>}
           {result.errors.length > 0 && (
             <details className="mt-2">
               <summary className="text-sm text-orange-700 cursor-pointer">⚠️ {result.errors.length} error(s) — click to view</summary>
