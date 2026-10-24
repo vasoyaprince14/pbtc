@@ -1,0 +1,432 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ShopSettings {
+  id            Int      @id @default(1)
+  shopName      String   @default("Prince Brass Trading Co.")
+  gstin         String   @default("")
+  stateName     String   @default("Haryana")
+  stateCode     String   @default("06")
+  address       String   @default("")
+  city          String   @default("Ambala")
+  pincode       String   @default("")
+  phone         String   @default("")
+  email         String   @default("")
+  invoicePrefix String   @default("INV")
+  challanPrefix String   @default("DC")
+  bankName      String   @default("")
+  bankAccount   String   @default("")
+  bankIfsc      String   @default("")
+  bankBranch    String   @default("")
+  termsNote     String   @default("Goods once sold will not be taken back.")
+  updatedAt     DateTime @updatedAt
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("owner")
+  createdAt    DateTime @default(now())
+}
+
+model Product {
+  id            Int      @id @default(autoincrement())
+  sku           String   @unique
+  name          String
+  hsnCode       String   @default("")
+  unit          String   @default("PCS")
+  category      String   @default("")
+  gstRate       Float    @default(18)
+  purchasePrice Float    @default(0)
+  salePrice     Float    @default(0)
+  rack          String   @default("")
+  openingStock  Float    @default(0)
+  minStock      Float    @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stockMovements StockMovement[]
+  saleItems      SaleItem[]
+  purchaseItems  PurchaseItem[]
+  challanItems   ChallanItem[]
+  documents      ProductDocument[]
+  quotationItems QuotationItem[]
+  salesOrderItems SalesOrderItem[]
+  jobCards       JobCard[]
+
+  @@index([name])
+  @@index([category])
+}
+
+model Customer {
+  id             Int      @id @default(autoincrement())
+  name           String
+  gstin          String   @default("")
+  stateName      String   @default("")
+  stateCode      String   @default("")
+  address        String   @default("")
+  city           String   @default("")
+  pincode        String   @default("")
+  phone          String   @default("")
+  email          String   @default("")
+  creditDays     Int      @default(0)
+  openingBalance Float    @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sales    Sale[]
+  challans Challan[]
+  payments Payment[]
+  quotations  Quotation[]
+  salesOrders SalesOrder[]
+
+  @@index([name])
+}
+
+model Supplier {
+  id             Int      @id @default(autoincrement())
+  name           String
+  gstin          String   @default("")
+  stateName      String   @default("")
+  stateCode      String   @default("")
+  address        String   @default("")
+  city           String   @default("")
+  pincode        String   @default("")
+  phone          String   @default("")
+  email          String   @default("")
+  openingBalance Float    @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  purchases Purchase[]
+  payments  Payment[]
+
+  @@index([name])
+}
+
+model Purchase {
+  id            Int      @id @default(autoincrement())
+  billNo        String
+  supplierBillNo String  @default("")
+  billDate      DateTime
+  supplierId    Int
+  subTotal      Float    @default(0)
+  discount      Float    @default(0)
+  cgstTotal     Float    @default(0)
+  sgstTotal     Float    @default(0)
+  igstTotal     Float    @default(0)
+  roundOff      Float    @default(0)
+  grandTotal    Float    @default(0)
+  paidAmount    Float    @default(0)
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  supplier Supplier       @relation(fields: [supplierId], references: [id])
+  items    PurchaseItem[]
+
+  @@unique([billNo])
+  @@index([billDate])
+}
+
+model PurchaseItem {
+  id         Int    @id @default(autoincrement())
+  purchaseId Int
+  productId  Int
+  hsnCode    String @default("")
+  quantity   Float
+  rate       Float
+  discount   Float  @default(0)
+  gstRate    Float
+  cgstAmt    Float  @default(0)
+  sgstAmt    Float  @default(0)
+  igstAmt    Float  @default(0)
+  taxable    Float
+  total      Float
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+}
+
+model Sale {
+  id         Int      @id @default(autoincrement())
+  invoiceNo  String   @unique
+  invoiceDate DateTime
+  customerId Int
+  salesOrderId Int?
+  isInterState Boolean @default(false)
+  subTotal   Float    @default(0)
+  discount   Float    @default(0)
+  cgstTotal  Float    @default(0)
+  sgstTotal  Float    @default(0)
+  igstTotal  Float    @default(0)
+  roundOff   Float    @default(0)
+  grandTotal Float    @default(0)
+  paidAmount Float    @default(0)
+  vehicleNo  String   @default("")
+  transporter String  @default("")
+  transporterGstin String @default("")
+  distanceKm Float?
+  ewayBillNo String   @default("")
+  dispatchAddress String @default("")
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer   @relation(fields: [customerId], references: [id])
+  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  items    SaleItem[]
+
+  @@index([invoiceDate])
+}
+
+model SaleItem {
+  id                Int    @id @default(autoincrement())
+  saleId            Int
+  productId         Int
+  salesOrderItemId  Int?
+  hsnCode           String @default("")
+  quantity          Float
+  rate              Float
+  discount          Float  @default(0)
+  gstRate           Float
+  cgstAmt           Float  @default(0)
+  sgstAmt           Float  @default(0)
+  igstAmt           Float  @default(0)
+  taxable           Float
+  total             Float
+  costPrice         Float  @default(0)
+
+  sale             Sale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product          Product          @relation(fields: [productId], references: [id])
+  salesOrderItem   SalesOrderItem?  @relation(fields: [salesOrderItemId], references: [id])
+}
+
+model Challan {
+  id          Int      @id @default(autoincrement())
+  challanNo   String   @unique
+  challanDate DateTime
+  customerId  Int
+  purpose     String   @default("Job Work")
+  vehicleNo   String   @default("")
+  transporter String   @default("")
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer Customer      @relation(fields: [customerId], references: [id])
+  items    ChallanItem[]
+}
+
+model ChallanItem {
+  id        Int    @id @default(autoincrement())
+  challanId Int
+  productId Int
+  quantity  Float
+  remarks   String @default("")
+
+  challan Challan @relation(fields: [challanId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id         Int      @id @default(autoincrement())
+  type       String
+  refNo      String
+  paidOn     DateTime
+  amount     Float
+  mode       String   @default("Cash")
+  customerId Int?
+  supplierId Int?
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+}
+
+model StockMovement {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  type      String
+  quantity  Float
+  refType   String   @default("")
+  refId     Int?
+  refNo     String   @default("")
+  costPrice Float    @default(0)
+  notes     String   @default("")
+  movedAt   DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([movedAt])
+}
+
+model ProductDocument {
+  id           Int      @id @default(autoincrement())
+  productId    Int
+  category     String   @default("drawing")
+  filename     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  notes        String   @default("")
+  uploadedAt   DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model Quotation {
+  id            Int      @id @default(autoincrement())
+  quotationNo   String   @unique
+  quotationDate DateTime
+  validUntil    DateTime?
+  customerId    Int
+  status        String   @default("draft")
+  isInterState  Boolean  @default(false)
+  subTotal      Float    @default(0)
+  discount      Float    @default(0)
+  cgstTotal     Float    @default(0)
+  sgstTotal     Float    @default(0)
+  igstTotal     Float    @default(0)
+  roundOff      Float    @default(0)
+  grandTotal    Float    @default(0)
+  paymentTerms  String   @default("")
+  deliveryTerms String   @default("")
+  notes         String   @default("")
+  convertedSalesOrderId Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer Customer        @relation(fields: [customerId], references: [id])
+  items    QuotationItem[]
+
+  @@index([quotationDate])
+  @@index([status])
+}
+
+model QuotationItem {
+  id          Int    @id @default(autoincrement())
+  quotationId Int
+  productId   Int
+  description String @default("")
+  hsnCode     String @default("")
+  quantity    Float
+  rate        Float
+  discount    Float  @default(0)
+  gstRate     Float
+  cgstAmt     Float  @default(0)
+  sgstAmt     Float  @default(0)
+  igstAmt     Float  @default(0)
+  taxable     Float
+  total       Float
+  deliveryDays Int   @default(0)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id])
+}
+
+model SalesOrder {
+  id            Int      @id @default(autoincrement())
+  soNo          String   @unique
+  soDate        DateTime
+  customerId    Int
+  customerPoNo  String   @default("")
+  customerPoDate DateTime?
+  status        String   @default("open")
+  isInterState  Boolean  @default(false)
+  subTotal      Float    @default(0)
+  cgstTotal     Float    @default(0)
+  sgstTotal     Float    @default(0)
+  igstTotal     Float    @default(0)
+  grandTotal    Float    @default(0)
+  expectedDelivery DateTime?
+  paymentTerms  String   @default("")
+  deliveryTerms String   @default("")
+  notes         String   @default("")
+  fromQuotationId Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  items    SalesOrderItem[]
+  sales    Sale[]
+  jobCards JobCard[]
+
+  @@index([soDate])
+  @@index([status])
+}
+
+model SalesOrderItem {
+  id             Int    @id @default(autoincrement())
+  salesOrderId   Int
+  productId      Int
+  description    String @default("")
+  hsnCode        String @default("")
+  orderedQty     Float
+  rate           Float
+  discount        Float  @default(0)
+  gstRate        Float
+  cgstAmt        Float  @default(0)
+  sgstAmt        Float  @default(0)
+  igstAmt        Float  @default(0)
+  taxable        Float
+  total          Float
+  expectedDelivery DateTime?
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
+  saleItems  SaleItem[]
+
+  @@index([salesOrderId])
+}
+
+model JobCard {
+  id            Int      @id @default(autoincrement())
+  cardNo        String   @unique
+  productId     Int
+  salesOrderId  Int?
+  quantity      Float
+  currentStage  String   @default("received")
+  operator      String   @default("")
+  machine       String   @default("")
+  startedAt     DateTime?
+  targetDate    DateTime?
+  completedAt   DateTime?
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product    Product     @relation(fields: [productId], references: [id])
+  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  stages     JobCardStage[]
+
+  @@index([currentStage])
+}
+
+model JobCardStage {
+  id         Int      @id @default(autoincrement())
+  jobCardId  Int
+  stage      String
+  enteredAt  DateTime @default(now())
+  enteredBy  String   @default("")
+  note       String   @default("")
+
+  jobCard JobCard @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+
+  @@index([jobCardId])
+}
