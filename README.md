@@ -18,6 +18,42 @@ Web-based shop management platform for a scientific instrument parts shop in Amb
 - **Backup** — one-click DB download + daily auto-backup script (macOS launchd) + last-30 rotation
 - **Shop Settings** — GSTIN, address, bank details, invoice/challan numbering
 
+## Public Demo
+
+`render.yaml` deploys a **demo-only** instance to Render's free plan.
+
+**Demo logins:** `admin` / `admin123` (owner) · `manager` / `manager123` · `staff` / `staff123`
+
+The build seeds realistic sample data (`npm run db:seed:demo`) — 14 brass SKUs,
+6 customers across 4 states so both CGST+SGST and IGST invoices appear, 5
+purchases, 12 invoices, quotations, sales orders, job cards mid-production, and
+payments, so every report has real numbers.
+
+> **The demo database is intentionally throwaway.** Render's free plan has no
+> persistent disk, so the SQLite file lives only inside the running container
+> and resets to clean sample data on every restart or redeploy. That keeps
+> visitors from permanently breaking the demo — but it means this setup must
+> **never** be used for the real shop. Real use needs a host with a persistent
+> volume (see below).
+
+### Deploying the demo
+
+1. Push this repo to GitHub.
+2. On Render: **New → Blueprint**, pick the repo. It reads `render.yaml` and
+   generates `SESSION_SECRET` automatically.
+3. After the first deploy, add a repo variable `DEMO_URL` pointing at the
+   Render URL so `.github/workflows/keepalive.yml` can keep it warm — free
+   services sleep after 15 idle minutes and take ~50s to wake.
+
+### Hosting the real thing
+
+For actual shop use the app needs a **persistent disk**, because three things
+write to the filesystem: the SQLite DB (`prisma/dev.db`), product document
+uploads (`uploads/`), and the backup button (`backups/`). Serverless hosts
+(Vercel, Netlify, Render free) will silently lose all three. Use a VPS, or any
+host with a mounted volume. Always set `TZ=Asia/Kolkata` — on a UTC server,
+invoice dates and the daily P&L land on the wrong day after 05:30 IST.
+
 ## Tech Stack
 
 - Next.js 14 (App Router) + React 18 + TypeScript

@@ -1,0 +1,33 @@
+# Render's free plan sleeps a service after 15 idle minutes and then takes
+# ~50s to wake — which looks broken when you send the demo link to someone.
+# Pinging it keeps it warm. One always-on service is ~730 h/month, inside the
+# 750 free instance-hours, so this stays within the free allowance.
+#
+# Setup: repo Settings -> Secrets and variables -> Actions -> Variables ->
+# New repository variable, name DEMO_URL, value https://<your-app>.onrender.com
+name: Keep demo awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping demo
+        env:
+          DEMO_URL: ${{ vars.DEMO_URL }}
+        run: |
+          if [ -z "$DEMO_URL" ]; then
+            echo "DEMO_URL repository variable is not set — skipping."
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 "$DEMO_URL/login")
+          echo "GET $DEMO_URL/login -> $code"
+          # 2xx/3xx is healthy; anything else fails the run so you get notified.
+          case "$code" in
+            2*|3*) exit 0 ;;
+            *) echo "Demo looks down (HTTP $code)"; exit 1 ;;
+          esac

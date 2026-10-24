@@ -1,0 +1,38 @@
+# Render blueprint for the PUBLIC DEMO deployment.
+#
+# The free plan has no persistent disk, so the SQLite file is built fresh
+# during the build step and lives only inside the running container. That is
+# intentional here: every restart/redeploy resets the demo to clean sample
+# data, so visitors cannot permanently break it.
+#
+# Do NOT use this blueprint for the real shop — real data would be lost on
+# every restart. That needs a host with a persistent volume.
+
+services:
+  - type: web
+    name: pbtc-demo
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: >-
+      npm ci &&
+      npx prisma generate &&
+      npx prisma db push --skip-generate &&
+      node prisma/seed-demo.mjs &&
+      npm run build
+    startCommand: npm start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Relative SQLite paths resolve against prisma/, so this is prisma/dev.db
+      # — the same path the backup route expects.
+      - key: DATABASE_URL
+        value: file:./dev.db
+      # Without this the server runs in UTC and invoice dates / daily P&L land
+      # on the wrong day after 05:30 IST.
+      - key: TZ
+        value: Asia/Kolkata
+      - key: SESSION_SECRET
+        generateValue: true
